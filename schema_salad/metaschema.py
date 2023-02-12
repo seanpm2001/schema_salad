@@ -138,10 +138,10 @@ class LoadingOptions:
         self.vocab = _vocab
         self.rvocab = _rvocab
 
-        if self.namespaces is not None:
+        if namespaces is not None:
             self.vocab = self.vocab.copy()
             self.rvocab = self.rvocab.copy()
-            for k, v in self.namespaces.items():
+            for k, v in namespaces.items():
                 self.vocab[k] = v
                 self.rvocab[v] = k
 
@@ -1725,6 +1725,7 @@ class ArraySchema(Saveable):
         self,
         items: Any,
         type_: Any,
+        flatten: Optional[Any] = None,
         extension_fields: Optional[Dict[str, Any]] = None,
         loadingOptions: Optional[LoadingOptions] = None,
     ) -> None:
@@ -1736,16 +1737,21 @@ class ArraySchema(Saveable):
             self.loadingOptions = loadingOptions
         else:
             self.loadingOptions = LoadingOptions()
+        self.flatten = flatten
         self.items = items
         self.type_ = type_
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, ArraySchema):
-            return bool(self.items == other.items and self.type_ == other.type_)
+            return bool(
+                self.flatten == other.flatten
+                and self.items == other.items
+                and self.type_ == other.type_
+            )
         return False
 
     def __hash__(self) -> int:
-        return hash((self.items, self.type_))
+        return hash((self.flatten, self.items, self.type_))
 
     @classmethod
     def fromDoc(
@@ -1761,6 +1767,51 @@ class ArraySchema(Saveable):
             _doc.lc.data = doc.lc.data
             _doc.lc.filename = doc.lc.filename
         _errors__ = []
+        if "flatten" in _doc:
+            try:
+                if _doc.get("flatten") is None:
+                    raise ValidationException("missing required field `flatten`", None, [])
+
+                flatten = load_field(
+                    _doc.get("flatten"),
+                    uri_union_of_None_type_or_booltype_False_True_2,
+                    baseuri,
+                    loadingOptions,
+                    lc=_doc.get("flatten")
+                )
+
+            except ValidationException as e:
+                error_message, to_print, verb_tensage = parse_errors(str(e))
+
+                if str(e) == "missing required field `flatten`":
+                    _errors__.append(
+                        ValidationException(
+                            str(e),
+                            None
+                        )
+                    )
+                else:
+                    if error_message != str(e):
+                        val_type = convert_typing(extract_type(type(_doc.get("flatten"))))
+                        _errors__.append(
+                            ValidationException(
+                                "the `flatten` field is not valid because:",
+                                SourceLine(_doc, "flatten", str),
+                                [ValidationException(f"Value is a {val_type}, "
+                                                     f"but valid {to_print} for this field "
+                                                     f"{verb_tensage} {error_message}")],
+                            )
+                        )
+                    else:
+                        _errors__.append(
+                            ValidationException(
+                                "the `flatten` field is not valid because:",
+                                SourceLine(_doc, "flatten", str),
+                                [e],
+                            )
+                        )
+        else:
+            flatten = None
         try:
             if _doc.get("items") is None:
                 raise ValidationException("missing required field `items`", None, [])
@@ -1860,7 +1911,7 @@ class ArraySchema(Saveable):
                 else:
                     _errors__.append(
                         ValidationException(
-                            "invalid field `{}`, expected one of: `items`, `type`".format(
+                            "invalid field `{}`, expected one of: `flatten`, `items`, `type`".format(
                                 k
                             ),
                             SourceLine(_doc, k, str),
@@ -1870,6 +1921,7 @@ class ArraySchema(Saveable):
         if _errors__:
             raise ValidationException("", None, _errors__, "*")
         _constructed = cls(
+            flatten=flatten,
             items=items,
             type_=type_,
             extension_fields=extension_fields,
@@ -1888,6 +1940,9 @@ class ArraySchema(Saveable):
         else:
             for ef in self.extension_fields:
                 r[ef] = self.extension_fields[ef]
+        if self.flatten is not None:
+            u = save_relative_uri(self.flatten, base_url, False, 2, relative_uris)
+            r["flatten"] = u
         if self.items is not None:
             u = save_relative_uri(self.items, base_url, False, 2, relative_uris)
             r["items"] = u
@@ -1904,7 +1959,7 @@ class ArraySchema(Saveable):
                 r["$schemas"] = self.loadingOptions.schemas
         return r
 
-    attrs = frozenset(["items", "type"])
+    attrs = frozenset(["flatten", "items", "type"])
 
 
 class MapSchema(Saveable):
@@ -7101,6 +7156,15 @@ uri_union_of_None_type_or_strtype_True_False_None = _URILoader(
 uri_array_of_strtype_True_False_None = _URILoader(array_of_strtype, True, False, None)
 Enum_nameLoader = _EnumLoader(("enum",), "Enum_name")
 typedsl_Enum_nameLoader_2 = _TypeDSLLoader(Enum_nameLoader, 2, "v1.1")
+union_of_None_type_or_booltype = _UnionLoader(
+    (
+        None_type,
+        booltype,
+    )
+)
+uri_union_of_None_type_or_booltype_False_True_2 = _URILoader(
+    union_of_None_type_or_booltype, False, True, 2
+)
 uri_union_of_PrimitiveTypeLoader_or_RecordSchemaLoader_or_EnumSchemaLoader_or_ArraySchemaLoader_or_MapSchemaLoader_or_UnionSchemaLoader_or_strtype_or_array_of_union_of_PrimitiveTypeLoader_or_RecordSchemaLoader_or_EnumSchemaLoader_or_ArraySchemaLoader_or_MapSchemaLoader_or_UnionSchemaLoader_or_strtype_False_True_2 = _URILoader(
     union_of_PrimitiveTypeLoader_or_RecordSchemaLoader_or_EnumSchemaLoader_or_ArraySchemaLoader_or_MapSchemaLoader_or_UnionSchemaLoader_or_strtype_or_array_of_union_of_PrimitiveTypeLoader_or_RecordSchemaLoader_or_EnumSchemaLoader_or_ArraySchemaLoader_or_MapSchemaLoader_or_UnionSchemaLoader_or_strtype,
     False,
@@ -7113,12 +7177,6 @@ Map_nameLoader = _EnumLoader(("map",), "Map_name")
 typedsl_Map_nameLoader_2 = _TypeDSLLoader(Map_nameLoader, 2, "v1.1")
 Union_nameLoader = _EnumLoader(("union",), "Union_name")
 typedsl_Union_nameLoader_2 = _TypeDSLLoader(Union_nameLoader, 2, "v1.1")
-union_of_None_type_or_booltype = _UnionLoader(
-    (
-        None_type,
-        booltype,
-    )
-)
 union_of_None_type_or_inttype = _UnionLoader(
     (
         None_type,
